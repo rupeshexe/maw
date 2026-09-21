@@ -1,0 +1,28 @@
+{
+  "name": "maw",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Programmable wallet and policy engine for AI agents, built around Microsoft Copilot, Entra ID, Azure and stablecoin payment adapters.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:api": "npm run dev -w @maw/api",
+    "dev:web": "npm run dev -w @maw/web",
+    "db:generate": "npm run generate -w @maw/db",
+    "db:migrate": "npm run migrate -w @maw/db",
+    "db:seed": "npm run seed -w @maw/db",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:up": "docker compose up -d postgres"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.9.0"
+  }
+}
