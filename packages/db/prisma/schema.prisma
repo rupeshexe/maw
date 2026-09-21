@@ -1,0 +1,399 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Principal {
+  id                String   @id @default(cuid())
+  tenantId          String
+  externalSubjectId String
+  principalType     String
+  displayName       String
+  email             String?
+  roles             String[]
+  status            String   @default("active")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  wallets         Wallet[]
+  intents         PaymentIntent[]
+  policiesCreated SpendingPolicy[]
+
+  @@unique([tenantId, externalSubjectId])
+  @@index([tenantId])
+}
+
+model Wallet {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  name               String
+  principalId        String
+  status             String   @default("active")
+  defaultAsset       String
+  network            String
+  provider           String
+  providerAccountRef String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  principal     Principal          @relation(fields: [principalId], references: [id])
+  balances      WalletBalance[]
+  assignments   PolicyAssignment[]
+  intents       PaymentIntent[]
+  subscriptions Subscription[]
+  escrows       Escrow[]
+
+  @@index([tenantId])
+  @@index([principalId])
+}
+
+model WalletBalance {
+  id        String   @id @default(cuid())
+  tenantId  String
+  walletId  String
+  asset     String
+  available Decimal  @default(0) @db.Decimal(38, 8)
+  reserved  Decimal  @default(0) @db.Decimal(38, 8)
+  updatedAt DateTime @updatedAt
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, asset])
+  @@index([tenantId])
+}
+
+model SpendingPolicy {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  version     Int      @default(1)
+  status      String   @default("active")
+  currency    String   @default("USD")
+  rulesJson   Json
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     Principal          @relation(fields: [createdBy], references: [id])
+  assignments PolicyAssignment[]
+  versions    PolicyVersion[]
+
+  @@index([tenantId])
+}
+
+model PolicyVersion {
+  id        String   @id @default(cuid())
+  tenantId  String
+  policyId  String
+  version   Int
+  currency  String
+  rulesJson Json
+  createdBy String
+  createdAt DateTime @default(now())
+
+  policy SpendingPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@unique([policyId, version])
+  @@index([tenantId])
+}
+
+model PolicyAssignment {
+  id            String    @id @default(cuid())
+  tenantId      String
+  policyId      String
+  walletId      String
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  priority      Int       @default(100)
+  createdAt     DateTime  @default(now())
+
+  policy SpendingPolicy @relation(fields: [policyId], references: [id])
+  wallet Wallet         @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([walletId])
+}
+
+model Supplier {
+  id                String   @id @default(cuid())
+  tenantId          String
+  name              String
+  category          String
+  supplierGroup     String   @default("approved")
+  status            String   @default("active")
+  externalReference String?
+  metadataJson      Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  destinations Destination[]
+
+  @@index([tenantId])
+}
+
+model Destination {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  type               String
+  label              String
+  addressOrReference String
+  network            String
+  supplierId         String?
+  status             String   @default("pending_verification")
+  metadataJson       Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
+  intents       PaymentIntent[]
+  subscriptions Subscription[]
+  escrows       Escrow[]
+
+  @@unique([tenantId, network, addressOrReference])
+  @@index([tenantId])
+}
+
+model PaymentIntent {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  walletId               String
+  initiatedByPrincipalId String
+  amount                 Decimal  @db.Decimal(38, 8)
+  currency               String
+  asset                  String
+  network                String
+  destinationId          String
+  purpose                String?
+  category               String?
+  idempotencyKey         String
+  requestHash            String
+  status                 String
+  kind                   String   @default("payment")
+  subscriptionId         String?
+  escrowId               String?
+  azureContextJson       Json?
+  failureReason          String?
+  providerTransactionRef String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  wallet         Wallet               @relation(fields: [walletId], references: [id])
+  initiator      Principal            @relation(fields: [initiatedByPrincipalId], references: [id])
+  destination    Destination          @relation(fields: [destinationId], references: [id])
+  decisions      PolicyDecision[]
+  approvals      ApprovalRequest[]
+  transactions   Transaction[]
+  billingRecords AzureBillingRecord[]
+
+  @@unique([tenantId, walletId, idempotencyKey])
+  @@index([tenantId, status])
+  @@index([walletId, createdAt])
+}
+
+model PolicyDecision {
+  id               String   @id @default(cuid())
+  tenantId         String
+  paymentIntentId  String
+  decision         String
+  reasonsJson      Json
+  matchedRulesJson Json
+  policyVersion    String
+  evaluatedAt      DateTime @default(now())
+
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([paymentIntentId])
+}
+
+model ApprovalRequest {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  paymentIntentId      String
+  status               String    @default("pending")
+  requiredApproverRole String    @default("MAW.Approver")
+  requestedAt          DateTime  @default(now())
+  decidedAt            DateTime?
+  decidedBy            String?
+  decisionReason       String?
+
+  paymentIntent PaymentIntent   @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+  events        ApprovalEvent[]
+
+  @@index([tenantId, status])
+}
+
+model ApprovalEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  approvalId String
+  actorId    String
+  action     String
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  approval ApprovalRequest @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+
+  @@index([approvalId])
+}
+
+model Transaction {
+  id                     String    @id @default(cuid())
+  tenantId               String
+  paymentIntentId        String
+  provider               String
+  network                String
+  asset                  String
+  amount                 Decimal   @db.Decimal(38, 8)
+  status                 String
+  txHashOrReference      String?
+  demo                   Boolean   @default(false)
+  settlementMetadataJson Json?
+  createdAt              DateTime  @default(now())
+  settledAt              DateTime?
+
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id])
+  receipts      Receipt[]
+
+  @@index([tenantId])
+  @@index([paymentIntentId])
+}
+
+model Receipt {
+  id            String   @id @default(cuid())
+  tenantId      String
+  transactionId String
+  payloadJson   Json
+  payloadHash   String
+  signature     String
+  keyId         String
+  algorithm     String
+  createdAt     DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+
+  @@index([tenantId])
+  @@index([transactionId])
+}
+
+model Subscription {
+  id                String    @id @default(cuid())
+  tenantId          String
+  walletId          String
+  destinationId     String
+  amount            Decimal   @db.Decimal(38, 8)
+  asset             String
+  currency          String    @default("USD")
+  category          String?
+  purpose           String?
+  cadence           String
+  nextExecutionAt   DateTime
+  endsAt            DateTime?
+  maxExecutions     Int?
+  executionCount    Int       @default(0)
+  status            String    @default("active")
+  lastResultJson    Json?
+  policyContextJson Json?
+  createdBy         String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  wallet      Wallet      @relation(fields: [walletId], references: [id])
+  destination Destination @relation(fields: [destinationId], references: [id])
+
+  @@index([tenantId, status, nextExecutionAt])
+}
+
+model Escrow {
+  id                       String    @id @default(cuid())
+  tenantId                 String
+  payerWalletId            String
+  beneficiaryDestinationId String
+  amount                   Decimal   @db.Decimal(38, 8)
+  asset                    String
+  state                    String    @default("created")
+  releaseConditionJson     Json
+  externalReference        String?
+  counterpartyAcknowledged Boolean   @default(false)
+  externalComplete         Boolean   @default(false)
+  createdBy                String
+  expiresAt                DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  payerWallet Wallet      @relation(fields: [payerWalletId], references: [id])
+  beneficiary Destination @relation(fields: [beneficiaryDestinationId], references: [id])
+
+  @@index([tenantId, state])
+}
+
+model AuditEvent {
+  id               String   @id @default(cuid())
+  tenantId         String
+  actorPrincipalId String?
+  eventType        String
+  resourceType     String
+  resourceId       String
+  outcome          String
+  detailsJson      Json?
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([resourceType, resourceId])
+}
+
+model ConversionQuote {
+  id           String   @id @default(cuid())
+  tenantId     String
+  walletId     String
+  fromAsset    String
+  toAsset      String
+  sourceAmount Decimal  @db.Decimal(38, 8)
+  targetAmount Decimal  @db.Decimal(38, 8)
+  feeAmount    Decimal  @db.Decimal(38, 8)
+  rate         Decimal  @db.Decimal(38, 12)
+  provider     String
+  demo         Boolean  @default(false)
+  status       String   @default("open")
+  expiresAt    DateTime
+  requestedBy  String
+  providerRef  String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, status])
+}
+
+model AzureBillingRecord {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  azureSubscriptionId String
+  resourceId          String?
+  costCategory        String
+  invoiceReference    String
+  chargeAmount        Decimal  @db.Decimal(38, 8)
+  chargeCurrency      String
+  paymentIntentId     String?
+  transactionId       String?
+  status              String   @default("unmatched")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  paymentIntent PaymentIntent? @relation(fields: [paymentIntentId], references: [id])
+
+  @@unique([tenantId, invoiceReference])
+  @@index([tenantId, status])
+}
+
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  provider   String
+  externalId String
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, externalId])
+}
