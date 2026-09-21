@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: maw
+      POSTGRES_PASSWORD: maw_local_dev
+      POSTGRES_DB: maw
+    ports:
+      - "5432:5432"
+    volumes:
+      - maw-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maw -d maw"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  maw-pgdata:
