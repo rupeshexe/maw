@@ -1,5 +1,5 @@
 import type { Prisma } from "@maw/db";
-import type { Actor, Client } from "./context";
+import type { Client } from "./context";
 
 export interface AuditInput {
   eventType: string;
@@ -9,7 +9,9 @@ export interface AuditInput {
   details?: Record<string, unknown>;
 }
 
-export async function audit(client: Client, actor: Pick<Actor, "tenantId" | "principalId"> | { tenantId: string; principalId: null }, input: AuditInput) {
+export type AuditActor = { tenantId: string; principalId: string | null };
+
+export async function audit(client: Client, actor: AuditActor, input: AuditInput) {
   await client.auditEvent.create({
     data: {
       tenantId: actor.tenantId,

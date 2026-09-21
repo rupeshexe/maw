@@ -6,6 +6,7 @@ import { evaluatePolicies } from "@maw/policy-engine";
 import type { EvaluationResult, PaymentKind } from "@maw/policy-engine";
 import type { TransferResult } from "@maw/payment-adapters";
 import { audit } from "./audit";
+import type { AuditActor } from "./audit";
 import { isPrivileged, isUniqueViolation, num, requireRole } from "./context";
 import type { Actor, Client, Deps } from "./context";
 import { activePoliciesForWallet } from "./policies";
@@ -384,7 +385,7 @@ async function replay(deps: Deps, actor: Actor, existing: { id: string; requestH
   return toPaymentResponse(await loadIntentView(deps.db, actor.tenantId, existing.id));
 }
 
-export async function executeIntent(deps: Deps, actor: Pick<Actor, "tenantId" | "principalId">, intentId: string) {
+export async function executeIntent(deps: Deps, actor: AuditActor, intentId: string) {
   const claim = await deps.db.paymentIntent.updateMany({ where: { id: intentId, tenantId: actor.tenantId, status: "approved" }, data: { status: "executing" } });
   if (claim.count === 0) throw new MawError("invalid_state", "Payment intent is not ready for execution");
   const intent = await deps.db.paymentIntent.findUniqueOrThrow({ where: { id: intentId }, include: { wallet: true, destination: true } });
@@ -417,7 +418,7 @@ export async function executeIntent(deps: Deps, actor: Pick<Actor, "tenantId" | 
 
 export async function finalizeTransfer(
   deps: Deps,
-  actor: Pick<Actor, "tenantId" | "principalId">,
+  actor: AuditActor,
   intentId: string,
   result: TransferResult,
   existingTransactionId?: string
@@ -539,7 +540,7 @@ async function recheckBeforeExecution(deps: Deps, actor: Actor, intentId: string
   return null;
 }
 
-export async function cancelIntent(deps: Deps, actor: Pick<Actor, "tenantId" | "principalId">, intentId: string, reason: string) {
+export async function cancelIntent(deps: Deps, actor: AuditActor, intentId: string, reason: string) {
   await deps.db.$transaction(async (tx) => {
     const intent = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intentId }, include: { wallet: true } });
     await lockWallet(tx, intent.walletId);

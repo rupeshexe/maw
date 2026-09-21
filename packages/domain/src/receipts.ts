@@ -4,6 +4,7 @@ import { MawError } from "@maw/shared";
 import { RECEIPT_VERSION, hashMetadata, hashPayload, signReceipt, verifyReceipt } from "@maw/receipt-kit";
 import type { ReceiptPayload } from "@maw/receipt-kit";
 import { audit } from "./audit";
+import type { AuditActor } from "./audit";
 import { num } from "./context";
 import type { Actor, Client, Deps } from "./context";
 import { assertWalletAccess } from "./wallets";
@@ -11,7 +12,7 @@ import { assertWalletAccess } from "./wallets";
 export async function createReceipt(
   client: Client,
   deps: Deps,
-  actor: Pick<Actor, "tenantId" | "principalId">,
+  actor: AuditActor,
   transactionId: string
 ) {
   const transaction = await client.transaction.findUniqueOrThrow({
