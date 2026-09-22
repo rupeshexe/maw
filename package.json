@@ -12,13 +12,16 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "echo Run dev:api and dev:web in separate terminals",
     "dev:api": "npm run dev -w @maw/api",
     "dev:web": "npm run dev -w @maw/web",
+    "build": "npm run build -w @maw/web",
+    "db:up": "docker compose up -d postgres",
     "db:generate": "npm run generate -w @maw/db",
     "db:migrate": "npm run migrate -w @maw/db",
     "db:seed": "npm run seed -w @maw/db",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "db:up": "docker compose up -d postgres"
+    "keygen": "node scripts/generate-dev-key.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
