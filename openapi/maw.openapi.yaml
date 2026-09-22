@@ -1,0 +1,613 @@
+openapi: 3.0.3
+info:
+  title: MAW Agent Wallet Actions
+  version: 0.1.0
+  description: Policy-controlled payment actions for AI agents. Agents request operations; MAW authorizes or denies them against the active spending policy and always returns the decision with reasons.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: localhost:4000
+security:
+  - entra: []
+tags:
+  - name: Wallets
+  - name: Payments
+  - name: Policies
+  - name: Subscriptions
+  - name: Escrow
+  - name: Receipts
+paths:
+  /v1/wallets/{walletId}/balance:
+    get:
+      operationId: getWalletBalance
+      summary: Get the balance of an agent wallet
+      tags: [Wallets]
+      parameters:
+        - $ref: "#/components/parameters/WalletId"
+      responses:
+        "200":
+          description: Balances for the wallet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletBalance"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/payment-intents:
+    post:
+      operationId: createPaymentIntent
+      summary: Request a payment from an agent wallet
+      description: MAW evaluates the request against the wallet's spending policy. The response states whether the payment was denied, requires approval, or was executed.
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentRequest"
+      responses:
+        "201":
+          description: Payment intent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResult"
+        "200":
+          description: Payment denied by policy, or an idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/payment-intents/{id}:
+    get:
+      operationId: getPaymentIntent
+      summary: Get the status and policy explanation of a payment
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Payment intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/payment-intents/{id}/approve:
+    post:
+      operationId: approvePaymentIntent
+      summary: Approve a payment that requires approval
+      description: Requires an approver principal that is not the payment initiator.
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Payment after the approval decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/payment-intents/{id}/reject:
+    post:
+      operationId: rejectPaymentIntent
+      summary: Reject a payment that requires approval
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Payment after the rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/policies/{id}:
+    get:
+      operationId: getSpendingPolicy
+      summary: Get a spending policy
+      tags: [Policies]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Spending policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendingPolicy"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/policy-evaluations/preview:
+    post:
+      operationId: previewPolicyEvaluation
+      summary: Check whether a spend would be allowed without creating a payment
+      description: Use this to answer questions such as whether a further amount can be spent this month.
+      tags: [Policies]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewRequest"
+      responses:
+        "200":
+          description: Policy decision preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyPreview"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/subscriptions:
+    post:
+      operationId: createSubscription
+      summary: Create a recurring payment subscription
+      description: Every execution is re-evaluated against the current spending policy.
+      tags: [Subscriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionRequest"
+      responses:
+        "201":
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/escrows:
+    post:
+      operationId: createEscrow
+      summary: Fund an escrow for a supplier or another agent
+      tags: [Escrow]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscrowRequest"
+      responses:
+        "201":
+          description: Escrow created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscrowResult"
+        "200":
+          description: Escrow funding denied by policy, or an idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscrowResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/escrows/{id}/release:
+    post:
+      operationId: releaseEscrow
+      summary: Release an escrow if its release condition is satisfied
+      tags: [Escrow]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Escrow after release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscrowResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/receipts/{id}:
+    get:
+      operationId: getReceipt
+      summary: Get a signed transaction receipt
+      tags: [Receipts]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Signed receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/receipts/verify:
+    post:
+      operationId: verifyReceipt
+      summary: Verify the integrity and signature of a receipt
+      tags: [Receipts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptVerificationRequest"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptVerification"
+        default:
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    entra:
+      type: oauth2
+      description: Microsoft Entra ID. Delegated or application tokens carrying MAW app roles.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/authorize
+          tokenUrl: https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token
+          scopes:
+            api://maw/.default: Access the MAW API
+  parameters:
+    WalletId:
+      name: walletId
+      in: path
+      required: true
+      schema:
+        type: string
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable key for the logical request. Retries with the same key and payload return the original result.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 200
+  responses:
+    Error:
+      description: Structured error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              nullable: true
+    WalletBalance:
+      type: object
+      properties:
+        walletId:
+          type: string
+        provider:
+          type: string
+        demo:
+          type: boolean
+        balances:
+          type: array
+          items:
+            type: object
+            properties:
+              asset:
+                type: string
+              available:
+                type: number
+              reserved:
+                type: number
+    PaymentRequest:
+      type: object
+      required: [walletId, destinationId, amount]
+      properties:
+        walletId:
+          type: string
+        destinationId:
+          type: string
+        amount:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+        asset:
+          type: string
+          example: USDC
+        network:
+          type: string
+          example: polygon
+        purpose:
+          type: string
+        category:
+          type: string
+          example: cloud
+        azureContext:
+          type: object
+          required: [azureSubscriptionId, costCategory, invoiceReference]
+          properties:
+            azureSubscriptionId:
+              type: string
+            resourceId:
+              type: string
+            costCategory:
+              type: string
+            invoiceReference:
+              type: string
+    PolicyReason:
+      type: object
+      properties:
+        code:
+          type: string
+        outcome:
+          type: string
+          enum: [deny, approval_required, pass]
+        message:
+          type: string
+        rule:
+          type: string
+    PaymentResult:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [denied, approval_required, approved, executing, submitted, settled, failed, cancelled]
+        summary:
+          type: string
+        amount:
+          type: number
+        asset:
+          type: string
+        network:
+          type: string
+        demo:
+          type: boolean
+          nullable: true
+        policyDecision:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            decision:
+              type: string
+              enum: [allow, deny, approval_required]
+            policyVersion:
+              type: string
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyReason"
+        receiptId:
+          type: string
+          nullable: true
+        externalReference:
+          type: string
+          nullable: true
+    DecisionRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+    SpendingPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+        currency:
+          type: string
+        rulesJson:
+          type: object
+    PreviewRequest:
+      type: object
+      required: [walletId, destinationId, amount]
+      properties:
+        walletId:
+          type: string
+        destinationId:
+          type: string
+        amount:
+          type: number
+        asset:
+          type: string
+        network:
+          type: string
+        category:
+          type: string
+        kind:
+          type: string
+          enum: [payment, subscription, escrow]
+    PolicyPreview:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [allow, deny, approval_required]
+        summary:
+          type: string
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyReason"
+    SubscriptionRequest:
+      type: object
+      required: [walletId, destinationId, amount, cadence]
+      properties:
+        walletId:
+          type: string
+        destinationId:
+          type: string
+        amount:
+          type: number
+        asset:
+          type: string
+        category:
+          type: string
+        purpose:
+          type: string
+        cadence:
+          type: string
+          enum: [daily, weekly, monthly]
+        firstExecutionAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        maxExecutions:
+          type: integer
+    SubscriptionResult:
+      type: object
+      properties:
+        subscription:
+          type: object
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+            cadence:
+              type: string
+            nextExecutionAt:
+              type: string
+              format: date-time
+        policyPreview:
+          $ref: "#/components/schemas/PolicyPreview"
+    EscrowRequest:
+      type: object
+      required: [payerWalletId, beneficiaryDestinationId, amount, releaseCondition]
+      properties:
+        payerWalletId:
+          type: string
+        beneficiaryDestinationId:
+          type: string
+        amount:
+          type: number
+        asset:
+          type: string
+        purpose:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        releaseCondition:
+          type: object
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [manual, time, external_reference, counterparty_ack]
+            releaseAt:
+              type: string
+              format: date-time
+            reference:
+              type: string
+    EscrowResult:
+      type: object
+      properties:
+        escrow:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            state:
+              type: string
+              enum: [created, funding_pending, funded, release_pending, released, refunded, expired, disputed]
+            amount:
+              type: number
+            asset:
+              type: string
+        payment:
+          $ref: "#/components/schemas/PaymentResult"
+    Receipt:
+      type: object
+      properties:
+        id:
+          type: string
+        payloadJson:
+          type: object
+        payloadHash:
+          type: string
+        signature:
+          type: string
+        keyId:
+          type: string
+        algorithm:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ReceiptVerificationRequest:
+      type: object
+      required: [payload, payloadHash, signature, keyId, algorithm]
+      properties:
+        payload:
+          type: object
+        payloadHash:
+          type: string
+        signature:
+          type: string
+        keyId:
+          type: string
+        algorithm:
+          type: string
+    ReceiptVerification:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        hashMatches:
+          type: boolean
+        signatureValid:
+          type: boolean
+        keyId:
+          type: string
+        algorithm:
+          type: string
+        reason:
+          type: string
+          nullable: true
