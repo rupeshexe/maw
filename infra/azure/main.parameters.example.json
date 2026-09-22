@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": { "value": "maw" },
+    "apiImage": { "value": "<registry>.azurecr.io/maw-api:0.1.0" },
+    "webImage": { "value": "<registry>.azurecr.io/maw-web:0.1.0" },
+    "entraTenantId": { "value": "<entra-tenant-id>" },
+    "entraApiClientId": { "value": "<api-app-client-id>" },
+    "entraWebClientId": { "value": "<web-app-client-id>" },
+    "entraApiScope": { "value": "api://<api-app-client-id>/access_as_user" },
+    "deployApiManagement": { "value": false },
+    "mawMode": { "value": "live" }
+  }
+}
