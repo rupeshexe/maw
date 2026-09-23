@@ -12,7 +12,6 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "echo Run dev:api and dev:web in separate terminals",
     "dev:api": "npm run dev -w @maw/api",
     "dev:web": "npm run dev -w @maw/web",
     "build": "npm run build -w @maw/web",
